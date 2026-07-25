@@ -1,5 +1,9 @@
 # 🏠 3DHuisje
 
+<img width="50%" height="100%" alt="example_arnhem3d" src="https://github.com/user-attachments/assets/7d8fd895-27fa-4430-82a6-8b4a9d17f359" />
+
+
+
 Inspect any Dutch building in 3D with per-wall/surface measurements coming from [3DBAG](https://3dbag.nl).
 
 **3DHuisje** is a single-file, unofficial viewer for [3DBAG](https://3dbag.nl) data. Paste a
@@ -28,8 +32,10 @@ Loading a downloaded file works in both cases.
 
 ### Where to find a building ID
 
-Open the [3DBAG viewer](https://3dbag.nl), click a building, and copy the `identificatie`
-attribute (it looks like `NL.IMBAG.Pand.` followed by 16 digits).
+<img width="75%" height="100%" alt="example_arnhem" src="https://github.com/user-attachments/assets/d0cce167-e727-403b-89bb-cb1cb5bb603d" />
+
+Open the [3DBAG viewer](https://3dbag.nl), click a building, and copy the **full** `identificatie`
+attribute (e.g., `NL.IMBAG.Pand.0202100000253372`).
 
 ## Notes & limitations
 
