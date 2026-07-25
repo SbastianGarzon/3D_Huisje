@@ -2,6 +2,8 @@
 
 <img width="50%" height="100%" alt="example_arnhem3d" src="https://github.com/user-attachments/assets/7d8fd895-27fa-4430-82a6-8b4a9d17f359" />
 
+[3DHuisje - Web App](https://sbastiangarzon.github.io/3D_Huisje/)
+
 
 
 Inspect any Dutch building in 3D with per-wall/surface measurements coming from [3DBAG](https://3dbag.nl).
