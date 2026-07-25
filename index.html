@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3DHuisje</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #1a1a1a; color: #fff; overflow: hidden; height: 100vh;
+        }
+        .header { background: #0d0d0d; padding: 0.9rem 1rem; border-bottom: 1px solid #333; }
+        .header h1 { font-size: 1.15rem; margin-bottom: 0.6rem; }
+        .row { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.4rem; }
+        .row:last-child { margin-bottom: 0; }
+        .row label { font-size: 0.8rem; color: #999; min-width: 60px; }
+        input[type="text"] {
+            flex: 1; min-width: 230px; padding: 0.5rem; background: #2a2a2a;
+            border: 1px solid #444; color: #fff; border-radius: 4px;
+            font-family: monospace; font-size: 0.85rem;
+        }
+        .button {
+            background: #0066cc; color: white; padding: 0.5rem 1.1rem;
+            border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; white-space: nowrap;
+        }
+        .button:hover { background: #0052a3; }
+        .button:disabled { background: #555; cursor: not-allowed; }
+        .main { display: flex; height: calc(100vh - 128px); }
+        #canvas { flex: 2; background: #2a2a2a; min-width: 300px; display: block; }
+        .sidebar {
+            flex: 1; background: #1a1a1a; overflow-y: auto; min-width: 250px;
+            border-left: 1px solid #333; padding: 1rem;
+        }
+        .status { padding: 0.7rem; border-radius: 4px; margin-bottom: 1rem; font-size: 0.9rem; display: none; }
+        .status.loading { display: block; background: #1e3a5f; color: #90caf9; }
+        .status.error { display: block; background: #5f1e1e; color: #ef9a9a; }
+        .status.success { display: block; background: #1e5f2e; color: #81c784; }
+        .building-name {
+            font-size: 0.8rem; color: #999; margin-bottom: 0.5rem;
+            padding-bottom: 0.5rem; border-bottom: 1px solid #333; word-break: break-all;
+        }
+        .surface-item {
+            background: #2a2a2a; padding: 0.7rem; margin-bottom: 0.5rem; border-radius: 4px;
+            cursor: pointer; border-left: 3px solid #555; font-size: 0.85rem;
+        }
+        .surface-item:hover { background: #333; }
+        .surface-item.selected { background: #0066cc; border-left-color: #00d4ff; }
+        .surface-label { font-weight: 600; margin-bottom: 0.3rem; }
+        .surface-values {
+            font-family: "Courier New", monospace; font-size: 0.8rem; color: #bbb; line-height: 1.45;
+        }
+        .empty-state { text-align: center; color: #666; padding: 2rem 1rem; font-size: 0.9rem; }
+        @media (max-width: 768px) {
+            .main { flex-direction: column; }
+            #canvas { flex: 1; min-height: 42vh; }
+            .sidebar { flex: 1; border-left: none; border-top: 1px solid #333; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🏠 3DHuisje <span style="font-size:0.75rem; font-weight:400; color:#888;">per-surface measurements for 3DBAG buildings (unofficial)</span></h1>
+        <div class="row">
+            <label>By ID:</label>
+            <input type="text" id="idInput" placeholder="NL.IMBAG.Pand.0106100000003786" />
+            <button class="button" id="fetchBtn">Fetch</button>
+        </div>
+        <div class="row">
+            <label>Or file:</label>
+            <input type="file" id="fileInput" accept=".json,.jsonl,application/json" />
+            <button class="button" id="processBtn">Load</button>
+        </div>
+    </div>
+
+    <div class="main">
+        <canvas id="canvas"></canvas>
+        <div class="sidebar">
+            <div id="status" class="status"></div>
+            <div id="content"><div class="empty-state">Enter a 3DBAG building ID or select a CityJSON file</div></div>
+            <div style="margin-top:1.5rem; padding-top:0.75rem; border-top:1px solid #333; font-size:0.75rem; color:#666;">
+                Built with <a href="https://claude.ai" style="color:#888;">Claude</a> (Anthropic) ·
+                Data: <a href="https://3dbag.nl" style="color:#888;">3DBAG</a>, TU Delft ·
+                <a href="https://docs.3dbag.nl" style="color:#888;">docs</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        const idInput = document.getElementById('idInput');
+        const fetchBtn = document.getElementById('fetchBtn');
+        const fileInput = document.getElementById('fileInput');
+        const processBtn = document.getElementById('processBtn');
+        const canvas = document.getElementById('canvas');
+        const statusDiv = document.getElementById('status');
+        const contentDiv = document.getElementById('content');
+
+        let scene, camera, renderer, building3d = null, selectedMesh = null;
+        const meshToSurface = new Map();
+        let surfaceList = [];
+
+        function showStatus(msg, type) {
+            statusDiv.textContent = msg;
+            statusDiv.className = 'status ' + type;
+        }
+
+        // ------------------------------------------------------------------
+        // Three.js setup
+        // ------------------------------------------------------------------
+        function initThree() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x2a2a2a);
+
+            camera = new THREE.PerspectiveCamera(60, canvas.clientWidth / canvas.clientHeight, 0.1, 100000);
+
+            renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+            renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+            renderer.setPixelRatio(window.devicePixelRatio);
+
+            const l1 = new THREE.DirectionalLight(0xffffff, 0.7);
+            l1.position.set(1, 2, 1.5);
+            scene.add(l1);
+            const l2 = new THREE.DirectionalLight(0xffffff, 0.35);
+            l2.position.set(-1.5, 1, -1);
+            scene.add(l2);
+            scene.add(new THREE.AmbientLight(0xffffff, 0.45));
+
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2();
+
+            function pick(clientX, clientY) {
+                const rect = canvas.getBoundingClientRect();
+                mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+                mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+                raycaster.setFromCamera(mouse, camera);
+                const hits = raycaster.intersectObjects(scene.children, true);
+                for (const h of hits) {
+                    if (meshToSurface.has(h.object)) { selectSurface(h.object); return; }
+                }
+            }
+
+            let dragging = false, prev = {x:0,y:0}, start = {x:0,y:0};
+
+            canvas.addEventListener('mousedown', e => {
+                dragging = true; prev = {x:e.clientX,y:e.clientY}; start = {x:e.clientX,y:e.clientY};
+            });
+            canvas.addEventListener('mousemove', e => {
+                if (dragging && building3d) {
+                    building3d.rotation.y += (e.clientX - prev.x) * 0.01;
+                    building3d.rotation.x += (e.clientY - prev.y) * 0.01;
+                }
+                prev = {x:e.clientX,y:e.clientY};
+            });
+            canvas.addEventListener('mouseup', e => {
+                dragging = false;
+                if (Math.hypot(e.clientX-start.x, e.clientY-start.y) < 5) pick(e.clientX, e.clientY);
+            });
+            canvas.addEventListener('wheel', e => {
+                e.preventDefault();
+                camera.position.multiplyScalar(1 + Math.sign(e.deltaY) * 0.1);
+            }, { passive: false });
+
+            // Touch
+            let tprev = {x:0,y:0};
+            canvas.addEventListener('touchstart', e => {
+                if (e.touches.length === 1) {
+                    tprev = {x:e.touches[0].clientX, y:e.touches[0].clientY};
+                    start = {...tprev};
+                }
+            }, { passive: true });
+            canvas.addEventListener('touchmove', e => {
+                if (e.touches.length === 1 && building3d) {
+                    e.preventDefault();
+                    building3d.rotation.y += (e.touches[0].clientX - tprev.x) * 0.01;
+                    building3d.rotation.x += (e.touches[0].clientY - tprev.y) * 0.01;
+                    tprev = {x:e.touches[0].clientX, y:e.touches[0].clientY};
+                }
+            }, { passive: false });
+            canvas.addEventListener('touchend', e => {
+                const t = e.changedTouches[0];
+                if (t && Math.hypot(t.clientX-start.x, t.clientY-start.y) < 10) pick(t.clientX, t.clientY);
+            });
+
+            (function animate() {
+                requestAnimationFrame(animate);
+                renderer.render(scene, camera);
+            })();
+
+            window.addEventListener('resize', () => {
+                camera.aspect = canvas.clientWidth / canvas.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+            });
+        }
+
+        // ------------------------------------------------------------------
+        // Format normalization (CityJSON, CityJSONSeq, API CityJSONFeature)
+        // ------------------------------------------------------------------
+        function normalize(text) {
+            const scenes = [];
+            let defaultTransform = { scale: [1,1,1], translate: [0,0,0] };
+
+            const handle = (data) => {
+                if (!data || typeof data !== 'object') return;
+                if (data.type === 'CityJSON' && data.CityObjects) {
+                    if (data.transform) defaultTransform = data.transform;
+                    if (Object.keys(data.CityObjects).length > 0) {
+                        scenes.push({ cityObjects: data.CityObjects, vertices: data.vertices || [], transform: data.transform || defaultTransform });
+                    }
+                } else if (data.type === 'CityJSONFeature') {
+                    scenes.push({ cityObjects: data.CityObjects || {}, vertices: data.vertices || [], transform: defaultTransform });
+                } else if (data.feature) {
+                    // api.3dbag.nl response: { feature: {CityObjects, vertices}, metadata: {transform} }
+                    const tr = (data.metadata && data.metadata.transform) || defaultTransform;
+                    scenes.push({ cityObjects: data.feature.CityObjects || {}, vertices: data.feature.vertices || [], transform: tr });
+                }
+            };
+
+            const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+            if (lines.length > 1) {
+                for (const line of lines) { try { handle(JSON.parse(line)); } catch (e) { console.warn('skipped line', e); } }
+            } else {
+                handle(JSON.parse(text));
+            }
+            return scenes;
+        }
+
+        // ------------------------------------------------------------------
+        // Geometry helpers
+        // ------------------------------------------------------------------
+        function newell(pts) {
+            let nx=0, ny=0, nz=0;
+            const n = pts.length;
+            for (let i = 0; i < n; i++) {
+                const a = pts[i], b = pts[(i+1)%n];
+                nx += (a[1]-b[1]) * (a[2]+b[2]);
+                ny += (a[2]-b[2]) * (a[0]+b[0]);
+                nz += (a[0]-b[0]) * (a[1]+b[1]);
+            }
+            const m = Math.sqrt(nx*nx+ny*ny+nz*nz);
+            if (m < 1e-12) return { normal: [0,0,0], area: 0 };
+            return { normal: [nx/m, ny/m, nz/m], area: m/2 };
+        }
+
+        // Solid:        boundaries[shell][face][ring][index]
+        // MultiSurface: boundaries[face][ring][index]
+        function* faces(geom) {
+            const b = geom.boundaries || [];
+            const sem = geom.semantics || {};
+            const surfaces = sem.surfaces || [];
+            const values = sem.values;
+
+            if (geom.type === 'Solid') {
+                for (let s = 0; s < b.length; s++) {
+                    const vals = (values && values[s]) || null;
+                    for (let f = 0; f < b[s].length; f++) {
+                        const semIdx = vals ? vals[f] : null;
+                        const st = (semIdx != null && surfaces[semIdx]) ? surfaces[semIdx].type : null;
+                        yield { ring: b[s][f][0] || [], semType: st };
+                    }
+                }
+            } else {
+                for (let f = 0; f < b.length; f++) {
+                    const semIdx = (values != null && values[f] != null) ? values[f] : null;
+                    const st = (semIdx != null && surfaces[semIdx]) ? surfaces[semIdx].type : null;
+                    yield { ring: b[f][0] || [], semType: st };
+                }
+            }
+        }
+
+        function bestLod(geoms) {
+            if (!geoms.length) return null;
+            const pref = ['2.2', '2.1', '2', '1.3', '1.2', '1'];
+            for (const p of pref) {
+                const g = geoms.find(g => String(g.lod) === p);
+                if (g) return g;
+            }
+            const sorted = [...geoms].sort((a,b) => parseFloat(b.lod||0) - parseFloat(a.lod||0));
+            return parseFloat(sorted[0].lod||0) > 0 ? sorted[0] : null;
+        }
+
+        function triangulate(pts, normal) {
+            const N = new THREE.Vector3(...normal);
+            let up = Math.abs(N.z) > 0.9 ? new THREE.Vector3(1,0,0) : new THREE.Vector3(0,0,1);
+            const U = new THREE.Vector3().crossVectors(up, N).normalize();
+            const V = new THREE.Vector3().crossVectors(N, U).normalize();
+            const p2 = pts.map(p => new THREE.Vector2(
+                p[0]*U.x + p[1]*U.y + p[2]*U.z,
+                p[0]*V.x + p[1]*V.y + p[2]*V.z
+            ));
+            let tris;
+            try { tris = THREE.ShapeUtils.triangulateShape(p2, []); }
+            catch (e) { tris = []; }
+            if (!tris.length) {
+                tris = [];
+                for (let i = 1; i < pts.length - 1; i++) tris.push([0, i, i+1]);
+            }
+            return tris;
+        }
+
+        function getColor(t) {
+            const c = {
+                'WallSurface': 0xcfa876, 'RoofSurface': 0xe06c60,
+                'GroundSurface': 0x5f7a4a, 'OuterCeilingSurface': 0xb0748c,
+                'OuterFloorSurface': 0x8c8c5a,
+            };
+            return new THREE.Color(c[t] || 0x9a9a9a);
+        }
+
+        // ------------------------------------------------------------------
+        // Load & render
+        // ------------------------------------------------------------------
+        function loadScenes(scenes) {
+            if (building3d) scene.remove(building3d);
+            meshToSurface.clear();
+            surfaceList = [];
+            selectedMesh = null;
+
+            building3d = new THREE.Group();
+            const inner = new THREE.Group();
+            building3d.add(inner);
+            scene.add(building3d);
+
+            let buildingIds = new Set();
+            const allPts = [];
+            const pending = [];
+
+            for (const sc of scenes) {
+                const t = sc.transform;
+                const verts = sc.vertices.map(v => [
+                    v[0]*t.scale[0] + t.translate[0],
+                    v[1]*t.scale[1] + t.translate[1],
+                    v[2]*t.scale[2] + t.translate[2],
+                ]);
+
+                for (const [oid, obj] of Object.entries(sc.cityObjects)) {
+                    if (obj.type !== 'Building' && obj.type !== 'BuildingPart') continue;
+                    const geom = bestLod(obj.geometry || []);
+                    if (!geom) continue;
+                    buildingIds.add(oid.replace(/-\d+$/, ''));
+
+                    for (const { ring, semType } of faces(geom)) {
+                        if (ring.length < 3) continue;
+                        const pts = ring.map(i => verts[i]).filter(Boolean);
+                        if (pts.length < 3) continue;
+                        pending.push({ pts, semType, oid });
+                        allPts.push(...pts);
+                    }
+                }
+            }
+
+            if (!pending.length) {
+                showStatus('❌ No 3D geometry found in this file', 'error');
+                return;
+            }
+
+            const cx = allPts.reduce((s,p)=>s+p[0],0)/allPts.length;
+            const cy = allPts.reduce((s,p)=>s+p[1],0)/allPts.length;
+            const zmin = Math.min(...allPts.map(p=>p[2]));
+
+            let wallN = 0, roofN = 0, otherN = 0, groundN = 0;
+            let maxExtent = 10;
+
+            for (const item of pending) {
+                const local = item.pts.map(p => [p[0]-cx, p[1]-cy, p[2]-zmin]);
+                const { normal, area } = newell(local);
+                if (area < 1e-6) continue;
+
+                for (const p of local) {
+                    maxExtent = Math.max(maxExtent, Math.abs(p[0]), Math.abs(p[1]));
+                }
+
+                const tris = triangulate(local, normal);
+                const flat = [];
+                for (const tr of tris) for (const idx of tr) flat.push(...local[idx]);
+
+                const g = new THREE.BufferGeometry();
+                g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(flat), 3));
+                g.computeVertexNormals();
+                const color = getColor(item.semType);
+                const mesh = new THREE.Mesh(g, new THREE.MeshPhongMaterial({
+                    color, side: THREE.DoubleSide, flatShading: true,
+                }));
+                inner.add(mesh);
+
+                const zs = local.map(p => p[2]);
+                const alto = Math.max(...zs) - Math.min(...zs);
+                let ancho = 0;
+                const um = Math.hypot(-normal[1], normal[0]);
+                if (um > 1e-9) {
+                    const ux = -normal[1]/um, uy = normal[0]/um;
+                    const pr = local.map(p => p[0]*ux + p[1]*uy);
+                    ancho = Math.max(...pr) - Math.min(...pr);
+                } else {
+                    const xs = local.map(p=>p[0]);
+                    ancho = Math.max(...xs) - Math.min(...xs);
+                }
+                let azimuth = null;
+                if (Math.abs(normal[0]) > 1e-6 || Math.abs(normal[1]) > 1e-6) {
+                    azimuth = (Math.atan2(normal[0], normal[1]) * 180/Math.PI + 360) % 360;
+                }
+
+                let label;
+                const st = item.semType || '';
+                if (st === 'WallSurface') label = 'Wall ' + (++wallN);
+                else if (st === 'RoofSurface') label = 'Roof ' + (++roofN);
+                else if (st === 'GroundSurface') label = 'Ground' + (++groundN > 1 ? ' ' + groundN : '');
+                else label = (st.replace('Surface','') || 'Surface') + ' ' + (++otherN);
+
+                const data = {
+                    mesh, label, semType: st, oid: item.oid,
+                    area: Math.round(area*100)/100,
+                    height: Math.round(alto*100)/100,
+                    width: Math.round(ancho*100)/100,
+                    azimuth: azimuth === null ? null : Math.round(azimuth*10)/10,
+                    color,
+                };
+                meshToSurface.set(mesh, data);
+                surfaceList.push(data);
+            }
+
+            // Reference: ground grid + axes (attached to the model so they rotate together)
+            const gridSize = Math.ceil(maxExtent * 2.6 / 10) * 10;
+            const divisions = Math.max(2, Math.round(gridSize / 5));  // one cell = 5 m
+            const grid = new THREE.GridHelper(gridSize, divisions, 0x668866, 0x3d4d3d);
+            grid.position.y = -0.02;
+            building3d.add(grid);
+
+            const axes = new THREE.AxesHelper(gridSize * 0.35);
+            // AxesHelper: X=red, Y=green (up), Z=blue. With our z-up data rotated to y-up:
+            // red = East, blue = South, green = height.
+            building3d.add(axes);
+
+            // z-up -> y-up
+            inner.rotation.x = -Math.PI/2;
+
+            renderSidebar([...buildingIds], divisions, gridSize);
+            fitCamera();
+        }
+
+        function renderSidebar(buildingIds, divisions, gridSize) {
+            const order = { 'WallSurface': 0, 'RoofSurface': 1, 'GroundSurface': 2 };
+            const sorted = [...surfaceList].sort((a,b) => {
+                const oa = order[a.semType] ?? 3, ob = order[b.semType] ?? 3;
+                return oa !== ob ? oa - ob : b.area - a.area;
+            });
+
+            let html = '<div class="building-name">' + buildingIds.join('<br>') +
+                       '<br>' + sorted.length + ' surfaces · grid cell = ' + (gridSize / divisions) + ' m' +
+                       '<br>axes: <span style="color:#e06c60">red = East</span>, <span style="color:#7ab0e0">blue = South</span>, <span style="color:#81c784">green = up</span></div>';
+            sorted.forEach((s, i) => {
+                s.domIndex = i;
+                html += '<div class="surface-item" data-i="' + i + '">' +
+                    '<div class="surface-label">' + s.label + '</div>' +
+                    '<div class="surface-values">' +
+                    'Area: ' + s.area.toFixed(2) + ' m²<br>' +
+                    'Height: ' + s.height.toFixed(2) + ' m<br>' +
+                    'Width: ' + s.width.toFixed(2) + ' m' +
+                    (s.azimuth !== null ? '<br>Azimuth: ' + s.azimuth.toFixed(1) + '°' : '') +
+                    '</div></div>';
+            });
+            contentDiv.innerHTML = html;
+
+            contentDiv.querySelectorAll('.surface-item').forEach(el => {
+                el.addEventListener('click', () => {
+                    selectSurface(sorted[parseInt(el.dataset.i)].mesh, false);
+                });
+            });
+        }
+
+        function selectSurface(mesh, scroll = true) {
+            if (selectedMesh) {
+                const d = meshToSurface.get(selectedMesh);
+                selectedMesh.material.color.copy(d.color);
+                selectedMesh.material.emissive.setHex(0x000000);
+            }
+            selectedMesh = mesh;
+            mesh.material.color.setHex(0x00d4ff);
+            mesh.material.emissive.setHex(0x004466);
+
+            const d = meshToSurface.get(mesh);
+            contentDiv.querySelectorAll('.surface-item').forEach(el => {
+                const isIt = parseInt(el.dataset.i) === d.domIndex;
+                el.classList.toggle('selected', isIt);
+                if (isIt && scroll) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            });
+        }
+
+        function fitCamera() {
+            const box = new THREE.Box3().setFromObject(building3d);
+            const size = box.getSize(new THREE.Vector3());
+            const center = box.getCenter(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+            const dist = maxDim / (2 * Math.tan((camera.fov * Math.PI/180) / 2)) * 1.1;
+            camera.position.set(center.x + dist*0.7, center.y + dist*0.5, center.z + dist*0.7);
+            camera.lookAt(center);
+        }
+
+        // ------------------------------------------------------------------
+        // Fetch by ID (direct, then CORS-proxy fallbacks)
+        // ------------------------------------------------------------------
+        async function fetchById() {
+            const id = idInput.value.trim();
+            if (!id) { showStatus('❌ Enter a building ID first', 'error'); return; }
+            if (!renderer) initThree();
+            fetchBtn.disabled = true;
+
+            const apiUrl = 'https://api.3dbag.nl/collections/pand/items/' + encodeURIComponent(id);
+            const attempts = [
+                { name: 'direct', url: apiUrl },
+                { name: 'proxy allorigins', url: 'https://api.allorigins.win/raw?url=' + encodeURIComponent(apiUrl) },
+            ];
+
+            let lastError = null;
+            for (const a of attempts) {
+                try {
+                    showStatus('Fetching (' + a.name + ')...', 'loading');
+                    const resp = await fetch(a.url, { headers: { 'Accept': 'application/json' } });
+                    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                    const text = await resp.text();
+                    const scenes = normalize(text);
+                    if (!scenes.length) throw new Error('Unrecognized response format');
+                    loadScenes(scenes);
+                    if (surfaceList.length) {
+                        showStatus('✓ ' + surfaceList.length + ' surfaces', 'success');
+                        fetchBtn.disabled = false;
+                        return;
+                    }
+                    throw new Error('No renderable geometry');
+                } catch (err) {
+                    console.warn(a.name + ' failed:', err);
+                    lastError = err;
+                }
+            }
+            showStatus('❌ Could not fetch (' + (lastError && lastError.message) + '). ' +
+                       'Open the API URL in a new tab, save it as .json and load it as a file below.', 'error');
+            fetchBtn.disabled = false;
+        }
+
+        fetchBtn.addEventListener('click', fetchById);
+        idInput.addEventListener('keypress', e => { if (e.key === 'Enter') fetchById(); });
+
+        processBtn.addEventListener('click', () => {
+            const file = fileInput.files[0];
+            if (!file) { showStatus('❌ Select a file first', 'error'); return; }
+            showStatus('Loading...', 'loading');
+
+            const reader = new FileReader();
+            reader.onload = e => {
+                try {
+                    if (!renderer) initThree();
+                    const scenes = normalize(e.target.result);
+                    if (!scenes.length) throw new Error('Unrecognized format');
+                    loadScenes(scenes);
+                    if (surfaceList.length) showStatus('✓ ' + surfaceList.length + ' surfaces', 'success');
+                } catch (err) {
+                    showStatus('❌ ' + err.message, 'error');
+                    console.error(err);
+                }
+            };
+            reader.onerror = () => showStatus('❌ Could not read the file', 'error');
+            reader.readAsText(file);
+        });
+
+        window.addEventListener('load', () => { if (!renderer) initThree(); });
+    </script>
+</body>
+</html>
