@@ -12,33 +12,35 @@
             display: flex; flex-direction: column;
         }
         .header { background: #0d0d0d; padding: 0.6rem 1rem; border-bottom: 1px solid #333; }
-        .header h1 { font-size: 1rem; margin-bottom: 0.45rem; }
+        .header h1 { font-size: 0.72rem; margin-bottom: 0.45rem; }
         .row { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.4rem; }
         .row:last-child { margin-bottom: 0; }
         .row label { font-size: 0.8rem; color: #999; min-width: 60px; }
         input[type="text"] {
-            flex: 1; min-width: 230px; padding: 0.5rem; background: #2a2a2a;
+            flex: 1; min-width: 210px; padding: 0.35rem 0.45rem; background: #2a2a2a;
             border: 1px solid #444; color: #fff; border-radius: 4px;
-            font-family: monospace; font-size: 0.85rem;
+            font-family: monospace; font-size: 0.72rem;
         }
         .button {
-            background: #0066cc; color: white; padding: 0.5rem 1.1rem;
-            border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; white-space: nowrap;
+            background: #0066cc; color: white; padding: 0.35rem 0.8rem;
+            border: none; border-radius: 4px; cursor: pointer; font-size: 0.75rem; white-space: nowrap;
         }
         .button:hover { background: #0052a3; }
         .button:disabled { background: #555; cursor: not-allowed; }
         .main { display: flex; flex: 1; min-height: 0; }
         #canvas { flex: 2; background: #2a2a2a; min-width: 300px; display: block; }
         .sidebar {
-            flex: 1; background: #1a1a1a; overflow-y: auto; min-width: 250px;
+            flex: 1; background: #1a1a1a; overflow: hidden; min-width: 250px;
             border-left: 1px solid #333; padding: 1rem;
+            display: flex; flex-direction: column;
         }
-        .status { padding: 0.7rem; border-radius: 4px; margin-bottom: 1rem; font-size: 0.9rem; display: none; }
+        #content { overflow-y: auto; flex: 1; min-height: 0; }
+        .status { padding: 0.45rem 0.6rem; border-radius: 4px; margin-bottom: 0.6rem; font-size: 0.78rem; display: none; }
         .status.loading { display: block; background: #1e3a5f; color: #90caf9; }
         .status.error { display: block; background: #5f1e1e; color: #ef9a9a; }
         .status.success { display: block; background: #1e5f2e; color: #81c784; }
         .building-name {
-            font-size: 0.8rem; color: #999; margin-bottom: 0.5rem;
+            font-size: 0.64rem; color: #999; margin-bottom: 0.5rem;
             padding-bottom: 0.5rem; border-bottom: 1px solid #333; word-break: break-all;
         }
         .surface-item {
@@ -61,12 +63,17 @@
 </head>
 <body>
     <div class="header">
-        <h1>🏠 3DHuisje <span style="font-size:0.7rem; font-weight:400; color:#888;">per-surface measurements for 3DBAG buildings (unofficial)</span></h1>
+        <h1 style="display:flex; align-items:baseline; gap:0.5rem; flex-wrap:wrap;">🏠 3DHuisje
+            <span style="font-size:0.7rem; font-weight:400; color:#888;">per-surface measurements for 3DBAG buildings (unofficial)</span>
+            <span style="margin-left:auto; font-size:0.56rem; font-weight:400; color:#997a4d;">⚠ Approximate LiDAR-derived values — verify on site ·
+                <span style="color:#888;">Built with <a href="https://claude.ai" target="_blank" rel="noopener" style="color:#aaa;">Claude</a> ·
+                Data: <a href="https://3dbag.nl" target="_blank" rel="noopener" style="color:#aaa;">3DBAG</a> (TU Delft)</span></span>
+        </h1>
         <div class="row">
-            <input type="text" id="idInput" placeholder="NL.IMBAG.Pand.0106100000003786" style="flex:2;" />
+            <input type="text" id="idInput" placeholder="NL.IMBAG.Pand.0758100000057028" style="flex:0 1 235px; min-width:0;" />
             <button class="button" id="fetchBtn">Fetch</button>
             <span style="color:#666; font-size:0.8rem;">or</span>
-            <input type="file" id="fileInput" accept=".json,.jsonl,application/json" style="flex:1; min-width:180px; font-size:0.8rem;" />
+            <input type="file" id="fileInput" accept=".json,.jsonl,application/json" style="flex:1; min-width:170px; font-size:0.68rem;" />
             <button class="button" id="processBtn">Load</button>
             <details id="pasteDetails" style="position:relative;">
                 <summary style="font-size:0.75rem; color:#777; cursor:pointer; white-space:nowrap;">paste JSON</summary>
@@ -83,11 +90,13 @@
     <div class="main">
         <canvas id="canvas"></canvas>
         <div class="sidebar">
+            <div id="pinned"></div>
             <div id="status" class="status"></div>
             <div id="content"><div class="empty-state">Enter a 3DBAG building ID or select a CityJSON file</div></div>
-            <div style="margin-top:1.5rem; padding-top:0.75rem; border-top:1px solid #333; font-size:0.75rem; color:#666;">
-                Built with <a href="https://claude.ai" style="color:#888;">Claude</a> (Anthropic) ·
-                Data: <a href="https://3dbag.nl" style="color:#888;">3DBAG</a>, TU Delft ·
+            <div style="margin-top:0.4rem; padding-top:0.3rem; border-top:1px solid #333; font-size:0.52rem; color:#666; line-height:1.5;">
+                <span style="color:#997a4d;">⚠ Approximate values — verify on site</span> ·
+                Built with <a href="https://claude.ai" style="color:#888;">Claude</a> ·
+                Data: <a href="https://3dbag.nl" style="color:#888;">3DBAG</a> (TU Delft) ·
                 <a href="https://docs.3dbag.nl" style="color:#888;">docs</a>
             </div>
         </div>
@@ -104,6 +113,7 @@
         const contentDiv = document.getElementById('content');
 
         let scene, camera, renderer, building3d = null, selectedMesh = null;
+        let innerGroup = null, edgeOverlay = null, modelExtent = 10, flatLayout = null;
         const meshToSurface = new Map();
         let surfaceList = [];
 
@@ -328,6 +338,8 @@
             const inner = new THREE.Group();
             building3d.add(inner);
             scene.add(building3d);
+            innerGroup = inner;
+            edgeOverlay = null;
 
             let buildingIds = new Set();
             const allPts = [];
@@ -417,7 +429,7 @@
                 else label = (st.replace('Surface','') || 'Surface') + ' ' + (++otherN);
 
                 const data = {
-                    mesh, label, semType: st, oid: item.oid,
+                    mesh, label, semType: st, oid: item.oid, pts: local,
                     area: Math.round(area*100)/100,
                     height: Math.round(alto*100)/100,
                     width: Math.round(ancho*100)/100,
@@ -436,6 +448,25 @@
             building3d.add(grid);
 
             const axes = new THREE.AxesHelper(gridSize * 0.35);
+            modelExtent = maxExtent;
+            const axLen = gridSize * 0.35;
+            const northLine = new THREE.Line(
+                new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -axLen),
+                ]),
+                new THREE.LineBasicMaterial({ color: 0x7ab0e0 })
+            );
+            building3d.add(northLine);
+            const axisTags = [
+                ['East',  [axLen * 1.12, 0, 0], '#e06c60'],
+                ['Up',    [0, axLen * 1.12, 0], '#81c784'],
+                ['North', [0, 0, -axLen * 1.12], '#7ab0e0'],
+            ];
+            for (const tag of axisTags) {
+                const s = makeTextSprite(tag[0], tag[2]);
+                s.position.set(tag[1][0], tag[1][1], tag[1][2]);
+                building3d.add(s);
+            }
             // AxesHelper: X=red, Y=green (up), Z=blue. With our z-up data rotated to y-up:
             // red = East, blue = South, green = height.
             building3d.add(axes);
@@ -460,9 +491,10 @@
                   '" target="_blank" rel="noopener" style="color:#7ab0e0;">View on 3dbag.nl ↗</a>'
                 : '';
 
-            let html = '<div class="building-name">' + buildingIds.join('<br>') + bagLink +
-                       '<br>' + sorted.length + ' surfaces · grid cell = ' + (gridSize / divisions) + ' m' +
-                       '<br>axes: <span style="color:#e06c60">red = East</span>, <span style="color:#7ab0e0">blue = South</span>, <span style="color:#81c784">green = up</span></div>';
+            document.getElementById('pinned').innerHTML =
+                '<div class="building-name">' + buildingIds.join('<br>') + bagLink +
+                '<br>' + sorted.length + ' surfaces \u00b7 grid cell = ' + (gridSize / divisions) + ' m' + '</div>';
+            let html = '';
             sorted.forEach((s, i) => {
                 s.domIndex = i;
                 html += '<div class="surface-item" data-i="' + i + '">' +
@@ -483,6 +515,250 @@
             });
         }
 
+        function makeTextSprite(text, color) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.font = '40px monospace';
+            const w = Math.ceil(ctx.measureText(text).width) + 20;
+            canvas.width = w; canvas.height = 56;
+            ctx.font = '40px monospace';
+            ctx.fillStyle = 'rgba(0,0,0,0.65)';
+            ctx.fillRect(0, 0, w, 56);
+            ctx.fillStyle = color || '#00ffcc';
+            ctx.fillText(text, 10, 40);
+            const tex = new THREE.CanvasTexture(canvas);
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
+            const s = Math.min(Math.max(modelExtent * 0.045, 0.7), 3);
+            sprite.scale.set(s * (w / 56), s, 1);
+            return sprite;
+        }
+
+        function edgeLengths(pts) {
+            const out = [];
+            for (let i = 0; i < pts.length; i++) {
+                const a = pts[i], b = pts[(i + 1) % pts.length];
+                out.push({
+                    len: Math.hypot(b[0]-a[0], b[1]-a[1], b[2]-a[2]),
+                    mid: [(a[0]+b[0])/2, (a[1]+b[1])/2, (a[2]+b[2])/2],
+                });
+            }
+            return out;
+        }
+
+        function showEdges(d) {
+            if (edgeOverlay && innerGroup) innerGroup.remove(edgeOverlay);
+            edgeOverlay = new THREE.Group();
+
+            // bright outline of the selected polygon
+            const pts3 = d.pts.map(p => new THREE.Vector3(p[0], p[1], p[2]));
+            const outline = new THREE.LineLoop(
+                new THREE.BufferGeometry().setFromPoints(pts3),
+                new THREE.LineBasicMaterial({ color: 0x00ffcc, depthTest: false })
+            );
+            edgeOverlay.add(outline);
+
+            // face centroid, to push labels outward from the surface
+            const c = [0, 1, 2].map(k => d.pts.reduce((s, p) => s + p[k], 0) / d.pts.length);
+            const offset = Math.min(Math.max(modelExtent * 0.10, 1), 4);
+            const leaderMat = new THREE.LineBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.9, depthTest: false });
+
+            // label edges of at least 0.5 m (all edges are listed in the sidebar)
+            for (const e of edgeLengths(d.pts)) {
+                if (e.len < 0.5) continue;
+                let dir = [e.mid[0]-c[0], e.mid[1]-c[1], e.mid[2]-c[2]];
+                const dm = Math.hypot(...dir);
+                dir = dm > 1e-6 ? dir.map(v => v/dm) : [0, 0, 1];
+                const lp = [e.mid[0]+dir[0]*offset, e.mid[1]+dir[1]*offset, e.mid[2]+dir[2]*offset];
+
+                // leader line from the edge midpoint to the label
+                edgeOverlay.add(new THREE.Line(
+                    new THREE.BufferGeometry().setFromPoints([
+                        new THREE.Vector3(...e.mid), new THREE.Vector3(...lp),
+                    ]),
+                    leaderMat
+                ));
+
+                const sprite = makeTextSprite(e.len.toFixed(2) + ' m');
+                sprite.position.set(lp[0], lp[1], lp[2]);
+                edgeOverlay.add(sprite);
+            }
+            innerGroup.add(edgeOverlay);
+        }
+
+        // ---- Flat "true view" of a surface (elevation-style, in the sidebar) ----
+        function vSub(a,b){ return [a[0]-b[0], a[1]-b[1], a[2]-b[2]]; }
+        function vCross(a,b){ return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]; }
+        function vDot(a,b){ return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]; }
+        function vNorm(a){ const m=Math.hypot(...a); return m>1e-12 ? a.map(v=>v/m) : [0,0,0]; }
+
+        function surfaceSVG(d) {
+            const { normal } = newell(d.pts);
+            let right, up;
+            if (Math.abs(normal[2]) < 0.9) {
+                // wall or slanted roof: look at it head-on, real vertical pointing up
+                right = vNorm(vCross([0,0,1], normal));
+                up = vNorm(vCross(normal, right));
+                if (up[2] < 0) { up = up.map(v=>-v); right = right.map(v=>-v); }
+            } else {
+                // ground / flat roof: plan view, North up
+                right = [1,0,0]; up = [0,1,0];
+            }
+
+            const p2 = d.pts.map(p => [vDot(p, right), vDot(p, up)]);
+            const xs = p2.map(p=>p[0]), ys = p2.map(p=>p[1]);
+            const minX = Math.min(...xs), maxX = Math.max(...xs);
+            const minY = Math.min(...ys), maxY = Math.max(...ys);
+            const bw = Math.max(maxX-minX, 0.01), bh = Math.max(maxY-minY, 0.01);
+
+            const margin = 30;
+            const scale = Math.min(230/bw, 190/bh);
+            const W = bw*scale + 2*margin, H = bh*scale + 2*margin;
+            // to SVG coords (y flipped)
+            const sx = x => margin + (x-minX)*scale;
+            const sy = y => margin + (maxY-y)*scale;
+            const sp = p2.map(p => [sx(p[0]), sy(p[1])]);
+
+            const cx2 = sp.reduce((s,p)=>s+p[0],0)/sp.length;
+            const cy2 = sp.reduce((s,p)=>s+p[1],0)/sp.length;
+
+            let svg = '<svg id="flatSvg" viewBox="0 0 ' + W.toFixed(0) + ' ' + H.toFixed(0) + '" style="width:100%; max-height:260px; display:block; margin-top:0.4rem; background:#222; border-radius:4px; touch-action:none; cursor:grab;">';
+            svg += '<polygon points="' + sp.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ') + '" fill="rgba(0,212,255,0.13)" stroke="#00d4ff" stroke-width="1.5"/>';
+            // first edge highlighted so the list order can be followed around the polygon
+            svg += '<line x1="' + sp[0][0].toFixed(1) + '" y1="' + sp[0][1].toFixed(1) + '" x2="' + sp[1][0].toFixed(1) + '" y2="' + sp[1][1].toFixed(1) + '" stroke="#ffaa00" stroke-width="3" stroke-linecap="round"/>';
+
+            const lens = edgeLengths(d.pts);
+            for (let i = 0; i < sp.length; i++) {
+                const a = sp[i], b = sp[(i+1)%sp.length];
+                const len = lens[i].len;
+                if (len < 0.5) continue;
+                const mx = (a[0]+b[0])/2, my = (a[1]+b[1])/2;
+                let ox = mx-cx2, oy = my-cy2;
+                const om = Math.hypot(ox,oy) || 1;
+                const lx = mx + ox/om*14, ly = my + oy/om*14;
+                svg += '<text x="' + lx.toFixed(1) + '" y="' + ly.toFixed(1) + '" text-anchor="middle" dominant-baseline="middle" ' +
+                       'font-family="monospace" font-size="10" fill="' + (i === 0 ? '#ffaa00' : '#b2f5ea') + '" stroke="#1a1a1a" stroke-width="3" paint-order="stroke">' +
+                       len.toFixed(2) + '</text>';
+            }
+            // clickable corner handles for angle measurement
+            for (let i = 0; i < sp.length; i++) {
+                svg += '<circle class="vx" data-i="' + i + '" cx="' + sp[i][0].toFixed(1) + '" cy="' + sp[i][1].toFixed(1) + '" r="4.5" fill="#00d4ff" stroke="#1a1a1a" stroke-width="1" style="cursor:pointer;"/>';
+            }
+            const viewName = Math.abs(normal[2]) < 0.9 ? 'true view (head-on), heights up' : 'plan view, North up';
+            const btn = 'style="background:#333; color:#ccc; border:1px solid #555; border-radius:3px; width:26px; height:22px; cursor:pointer; font-size:0.8rem; line-height:1;"';
+            svg += '</svg>' +
+                '<div style="display:flex; align-items:center; gap:0.3rem; margin-top:0.25rem;">' +
+                '<button id="fzIn" ' + btn + '>+</button><button id="fzOut" ' + btn + '>&minus;</button><button id="fzReset" ' + btn + '>&#8634;</button>' +
+                '<span style="font-size:0.66rem; color:#777;">' + viewName + ' · <span style="color:#cc8800">first edge orange</span> · click corners for angles</span></div>';
+
+            flatLayout = { sp: sp, W: W, H: H };
+            return svg;
+        }
+
+        function setupFlatView() {
+            const svg = document.getElementById('flatSvg');
+            if (!svg || !flatLayout) return;
+            const L = flatLayout;
+            let vb = { x: 0, y: 0, w: L.W, h: L.H };
+            const apply = () => svg.setAttribute('viewBox', vb.x + ' ' + vb.y + ' ' + vb.w + ' ' + vb.h);
+
+            function zoom(f, cx, cy) {
+                const nw = Math.min(Math.max(vb.w * f, L.W * 0.05), L.W * 3);
+                const nh = nw * L.H / L.W;
+                cx = cx ?? vb.x + vb.w / 2;  cy = cy ?? vb.y + vb.h / 2;
+                vb.x = cx - (cx - vb.x) * nw / vb.w;
+                vb.y = cy - (cy - vb.y) * nh / vb.h;
+                vb.w = nw; vb.h = nh; apply();
+            }
+
+            svg.addEventListener('wheel', e => {
+                e.preventDefault();
+                const r = svg.getBoundingClientRect();
+                const cx = vb.x + (e.clientX - r.left) / r.width * vb.w;
+                const cy = vb.y + (e.clientY - r.top) / r.height * vb.h;
+                zoom(e.deltaY > 0 ? 1.15 : 0.87, cx, cy);
+            }, { passive: false });
+
+            let pan = null;
+            svg.addEventListener('pointerdown', e => {
+                if (e.target.classList.contains('vx')) return;
+                pan = { x: e.clientX, y: e.clientY };
+                svg.setPointerCapture(e.pointerId);
+            });
+            svg.addEventListener('pointermove', e => {
+                if (!pan) return;
+                const r = svg.getBoundingClientRect();
+                vb.x -= (e.clientX - pan.x) / r.width * vb.w;
+                vb.y -= (e.clientY - pan.y) / r.height * vb.h;
+                pan = { x: e.clientX, y: e.clientY };
+                apply();
+            });
+            svg.addEventListener('pointerup', () => pan = null);
+            svg.addEventListener('pointercancel', () => pan = null);
+
+            const bi = document.getElementById('fzIn'), bo = document.getElementById('fzOut'), br = document.getElementById('fzReset');
+            if (bi) bi.onclick = () => zoom(0.8);
+            if (bo) bo.onclick = () => zoom(1.25);
+            if (br) br.onclick = () => { vb = { x: 0, y: 0, w: L.W, h: L.H }; apply(); };
+
+            // interior angle at a clicked corner
+            const n = L.sp.length;
+            let A = 0;
+            for (let k = 0; k < n; k++) {
+                const a = L.sp[k], b = L.sp[(k+1)%n];
+                A += a[0]*b[1] - b[0]*a[1];
+            }
+            const cx2 = L.sp.reduce((s,p)=>s+p[0],0)/n;
+            const cy2 = L.sp.reduce((s,p)=>s+p[1],0)/n;
+
+            svg.querySelectorAll('.vx').forEach(c => {
+                c.addEventListener('click', ev => {
+                    ev.stopPropagation();
+                    const i = parseInt(c.dataset.i);
+                    const existing = svg.querySelectorAll('.ang[data-i="' + i + '"]');
+                    if (existing.length) { existing.forEach(el => el.remove()); c.setAttribute('fill', '#00d4ff'); return; }
+
+                    const v = L.sp[i], p = L.sp[(i-1+n)%n], q = L.sp[(i+1)%n];
+                    const u = [p[0]-v[0], p[1]-v[1]], w = [q[0]-v[0], q[1]-v[1]];
+                    let ang = Math.acos(Math.max(-1, Math.min(1,
+                        (u[0]*w[0]+u[1]*w[1]) / ((Math.hypot(u[0],u[1])*Math.hypot(w[0],w[1])) || 1)
+                    ))) * 180/Math.PI;
+                    const cross = (v[0]-p[0])*(q[1]-v[1]) - (v[1]-p[1])*(q[0]-v[0]);
+                    if (Math.sign(cross) !== Math.sign(A)) ang = 360 - ang;
+
+                    const NS = 'http://www.w3.org/2000/svg';
+                    for (const pair of [[p, v], [v, q]]) {
+                        const l = document.createElementNS(NS, 'line');
+                        l.setAttribute('x1', pair[0][0]); l.setAttribute('y1', pair[0][1]);
+                        l.setAttribute('x2', pair[1][0]); l.setAttribute('y2', pair[1][1]);
+                        l.setAttribute('stroke', '#ff5ec4');
+                        l.setAttribute('stroke-width', '2.5');
+                        l.setAttribute('stroke-linecap', 'round');
+                        l.setAttribute('class', 'ang');
+                        l.dataset.i = i;
+                        svg.appendChild(l);
+                    }
+                    let dx = cx2-v[0], dy = cy2-v[1];
+                    const dm = Math.hypot(dx,dy) || 1;
+                    const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    t.setAttribute('x', v[0] + dx/dm*20);
+                    t.setAttribute('y', v[1] + dy/dm*20);
+                    t.setAttribute('class', 'ang');
+                    t.dataset.i = i;
+                    t.setAttribute('text-anchor', 'middle');
+                    t.setAttribute('dominant-baseline', 'middle');
+                    t.setAttribute('font-family', 'monospace');
+                    t.setAttribute('font-size', '10');
+                    t.setAttribute('fill', '#ff5ec4');
+                    t.setAttribute('stroke', '#1a1a1a');
+                    t.setAttribute('stroke-width', '3');
+                    t.setAttribute('paint-order', 'stroke');
+                    t.textContent = ang.toFixed(1) + '\u00B0';
+                    svg.appendChild(t);
+                    c.setAttribute('fill', '#ff5ec4');
+                });
+            });
+        }
+
         function selectSurface(mesh, scroll = true) {
             if (selectedMesh) {
                 const d = meshToSurface.get(selectedMesh);
@@ -494,10 +770,24 @@
             mesh.material.emissive.setHex(0x004466);
 
             const d = meshToSurface.get(mesh);
+            showEdges(d);
+
+            const edges = edgeLengths(d.pts).map((e, i) => ({ len: e.len, i })).filter(e => e.len >= 0.05);
+            const edgeHtml = '<div class="edge-list" style="margin-top:0.4rem;">' + surfaceSVG(d) +
+                '<div style="margin-top:0.4rem; padding-top:0.4rem; border-top:1px solid rgba(255,255,255,0.25); font-family:monospace; font-size:0.75rem; color:#b2f5ea;">' +
+                'Edges (m): ' + edges.map(e =>
+                    e.i === 0 ? '<span style="color:#ffaa00; font-weight:bold;">' + e.len.toFixed(2) + '</span>' : e.len.toFixed(2)
+                ).join(' · ') + '</div></div>';
+
+            contentDiv.querySelectorAll('.edge-list').forEach(el => el.remove());
             contentDiv.querySelectorAll('.surface-item').forEach(el => {
                 const isIt = parseInt(el.dataset.i) === d.domIndex;
                 el.classList.toggle('selected', isIt);
-                if (isIt && scroll) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                if (isIt) {
+                    el.insertAdjacentHTML('beforeend', edgeHtml);
+                    setupFlatView();
+                    if (scroll) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
             });
         }
 
@@ -597,7 +887,15 @@
             }
         }
 
-        window.addEventListener('load', () => { if (!renderer) initThree(); });
+        const DEMO_BUILDING = {"feature":{"CityObjects":{"NL.IMBAG.Pand.0758100000057028":{"attributes":{"b3_bag_bag_overlap":null,"b3_bouwlagen":null,"b3_dak_type":"slanted","b3_extrusie":"standard","b3_h_dak_50p":8.925000190734863,"b3_h_dak_70p":9.12600040435791,"b3_h_dak_max":9.463000297546387,"b3_h_dak_min":8.425999641418457,"b3_h_maaiveld":4.618000030517578,"b3_h_nok":9.41514778137207,"b3_is_glas_dak":false,"b3_kas_warenhuis":false,"b3_kwaliteitsindicator":true,"b3_mutatie_ahn3_ahn4":false,"b3_mutatie_ahn4_ahn5":false,"b3_n_nok":1,"b3_n_vlakken":2,"b3_nodata_fractie_ahn3":0.025974025949835777,"b3_nodata_fractie_ahn4":0.0,"b3_nodata_fractie_ahn5":0.0,"b3_nodata_radius_ahn3":0.0,"b3_nodata_radius_ahn4":0.0,"b3_nodata_radius_ahn5":0.0,"b3_opp_buitenmuur":71.17,"b3_opp_dak_plat":0.0,"b3_opp_dak_schuin":21.96,"b3_opp_grond":18.99,"b3_opp_scheidingsmuur":0.0,"b3_puntdichtheid_ahn3":8.0,"b3_puntdichtheid_ahn4":13.922078132629395,"b3_puntdichtheid_ahn5":16.207792282104492,"b3_pw_bron":"ahn5","b3_pw_datum":2024,"b3_pw_onvoldoende":false,"b3_pw_selectie_reden":"PREFERRED_AND_LATEST","b3_rmse_lod12":0.35735979676246643,"b3_rmse_lod13":0.35735979676246643,"b3_rmse_lod22":0.023112015798687935,"b3_t_run":18,"b3_val3dity_lod12":"[]","b3_val3dity_lod13":"[]","b3_val3dity_lod22":"[]","b3_volume_lod12":85.46812438964844,"b3_volume_lod13":85.46812438964844,"b3_volume_lod22":81.70361328125,"begingeldigheid":"2010-10-12","documentdatum":"2010-10-12","documentnummer":"37115","eindgeldigheid":null,"eindregistratie":null,"fid":15214874,"geconstateerd":false,"identificatie":"NL.IMBAG.Pand.0758100000057028","oorspronkelijkbouwjaar":1970,"status":"Pand in gebruik","tijdstipeindregistratielv":null,"tijdstipinactief":null,"tijdstipinactieflv":null,"tijdstipnietbaglv":null,"tijdstipregistratie":"2010-12-30T20:39:32Z","tijdstipregistratielv":"2010-12-30T21:01:12Z","voorkomenidentificatie":1},"children":["NL.IMBAG.Pand.0758100000057028-0"],"geometry":[{"boundaries":[[[0,1,2,3]]],"lod":"0","type":"MultiSurface"}],"type":"Building"},"NL.IMBAG.Pand.0758100000057028-0":{"geometry":[{"boundaries":[[[[4,5,6,7]],[[8,5,4,9]],[[9,4,7,10]],[[11,6,5,8]],[[10,7,6,11]],[[10,11,8,9]]]],"lod":"1.2","semantics":{"surfaces":[{"type":"GroundSurface"},{"on_footprint_edge":true,"type":"WallSurface"},{"on_footprint_edge":false,"type":"WallSurface"},{"b3_h_dak_50p":8.876792907714844,"b3_h_dak_70p":9.10810375213623,"b3_h_dak_max":9.579610824584961,"b3_h_dak_min":8.25930118560791,"type":"RoofSurface"}],"values":[[0,1,1,1,1,3]]},"type":"Solid"},{"boundaries":[[[[4,5,6,7]],[[8,5,4,9]],[[9,4,7,10]],[[11,6,5,8]],[[10,7,6,11]],[[10,11,8,9]]]],"lod":"1.3","semantics":{"surfaces":[{"type":"GroundSurface"},{"on_footprint_edge":true,"type":"WallSurface"},{"on_footprint_edge":false,"type":"WallSurface"},{"b3_h_dak_50p":8.876792907714844,"b3_h_dak_70p":9.10810375213623,"b3_h_dak_max":9.579610824584961,"b3_h_dak_min":8.25930118560791,"type":"RoofSurface"}],"values":[[0,1,1,1,1,3]]},"type":"Solid"},{"boundaries":[[[[5,6,12,7,4,13]],[[14,7,12,15]],[[16,6,5,17]],[[15,12,6,16]],[[18,4,7,14]],[[17,5,13,19]],[[19,13,4,18]],[[17,19,15,16]],[[19,18,14,15]]]],"lod":"2.2","semantics":{"surfaces":[{"type":"GroundSurface"},{"on_footprint_edge":true,"type":"WallSurface"},{"on_footprint_edge":false,"type":"WallSurface"},{"b3_azimut":259.05517578125,"b3_h_dak_50p":8.997318267822266,"b3_h_dak_70p":9.228343963623047,"b3_h_dak_max":9.579610824584961,"b3_h_dak_min":8.313694953918457,"b3_hellingshoek":30.261465072631836,"type":"RoofSurface"},{"b3_azimut":80.35938262939453,"b3_h_dak_50p":8.833910942077637,"b3_h_dak_70p":9.070148468017578,"b3_h_dak_max":9.579610824584961,"b3_h_dak_min":8.25930118560791,"b3_hellingshoek":29.998104095458984,"type":"RoofSurface"}],"values":[[0,1,1,1,1,1,1,3,4]]},"type":"Solid"}],"parents":["NL.IMBAG.Pand.0758100000057028"],"type":"BuildingPart"}},"id":"NL.IMBAG.Pand.0758100000057028","type":"CityJSONFeature","vertices":[[3476,5906,0],[0,5306,0],[917,0,0],[4393,601,0],[4393,601,4618],[917,0,4618],[0,5306,4618],[3476,5906,4618],[917,0,9118],[4393,601,9118],[3476,5906,9118],[0,5306,9118],[1684,5597,4618],[2647,299,4618],[3476,5906,8400],[1684,5597,9450],[0,5306,8453],[917,0,8391],[4393,601,8391],[2647,299,9414]]},"links":[],"metadata":{"CityObjects":{},"metadata":{"referenceSystem":"https://www.opengis.net/def/crs/EPSG/0/7415"},"transform":{"scale":[0.001,0.001,0.001],"translate":[113352.2936875,397810.2855,0.0005007629394526703]},"type":"CityJSON","version":"2.0","vertices":[]},"id":"NL.IMBAG.Pand.0758100000057028"};
+
+        window.addEventListener('load', () => {
+            if (!renderer) initThree();
+            try {
+                loadFromText(JSON.stringify(DEMO_BUILDING));
+                showStatus('\u2713 Example building loaded \u2014 click a surface, or fetch your own ID above', 'success');
+            } catch (e) { console.warn('demo load failed', e); }
+        });
     </script>
 </body>
 </html>
