@@ -9,9 +9,10 @@
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             background: #1a1a1a; color: #fff; overflow: hidden; height: 100vh;
+            display: flex; flex-direction: column;
         }
-        .header { background: #0d0d0d; padding: 0.9rem 1rem; border-bottom: 1px solid #333; }
-        .header h1 { font-size: 1.15rem; margin-bottom: 0.6rem; }
+        .header { background: #0d0d0d; padding: 0.6rem 1rem; border-bottom: 1px solid #333; }
+        .header h1 { font-size: 1rem; margin-bottom: 0.45rem; }
         .row { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.4rem; }
         .row:last-child { margin-bottom: 0; }
         .row label { font-size: 0.8rem; color: #999; min-width: 60px; }
@@ -26,7 +27,7 @@
         }
         .button:hover { background: #0052a3; }
         .button:disabled { background: #555; cursor: not-allowed; }
-        .main { display: flex; height: calc(100vh - 128px); }
+        .main { display: flex; flex: 1; min-height: 0; }
         #canvas { flex: 2; background: #2a2a2a; min-width: 300px; display: block; }
         .sidebar {
             flex: 1; background: #1a1a1a; overflow-y: auto; min-width: 250px;
@@ -60,16 +61,22 @@
 </head>
 <body>
     <div class="header">
-        <h1>🏠 3DHuisje <span style="font-size:0.75rem; font-weight:400; color:#888;">per-surface measurements for 3DBAG buildings (unofficial)</span></h1>
+        <h1>🏠 3DHuisje <span style="font-size:0.7rem; font-weight:400; color:#888;">per-surface measurements for 3DBAG buildings (unofficial)</span></h1>
         <div class="row">
-            <label>By ID:</label>
-            <input type="text" id="idInput" placeholder="NL.IMBAG.Pand.0106100000003786" />
+            <input type="text" id="idInput" placeholder="NL.IMBAG.Pand.0106100000003786" style="flex:2;" />
             <button class="button" id="fetchBtn">Fetch</button>
-        </div>
-        <div class="row">
-            <label>Or file:</label>
-            <input type="file" id="fileInput" accept=".json,.jsonl,application/json" />
+            <span style="color:#666; font-size:0.8rem;">or</span>
+            <input type="file" id="fileInput" accept=".json,.jsonl,application/json" style="flex:1; min-width:180px; font-size:0.8rem;" />
             <button class="button" id="processBtn">Load</button>
+            <details id="pasteDetails" style="position:relative;">
+                <summary style="font-size:0.75rem; color:#777; cursor:pointer; white-space:nowrap;">paste JSON</summary>
+            </details>
+        </div>
+        <div class="row" id="pasteRow" style="display:none;">
+            <textarea id="pasteInput" placeholder='Paste the API response here (starts with {"feature":...)'
+                style="flex:1; height:44px; padding:0.4rem; background:#2a2a2a; border:1px solid #444;
+                       color:#fff; border-radius:4px; font-family:monospace; font-size:0.72rem; resize:vertical;"></textarea>
+            <button class="button" id="pasteBtn">Load</button>
         </div>
     </div>
 
@@ -358,6 +365,7 @@
             const cx = allPts.reduce((s,p)=>s+p[0],0)/allPts.length;
             const cy = allPts.reduce((s,p)=>s+p[1],0)/allPts.length;
             const zmin = Math.min(...allPts.map(p=>p[2]));
+            const rdCenter = { x: Math.round(cx*10)/10, y: Math.round(cy*10)/10 };
 
             let wallN = 0, roofN = 0, otherN = 0, groundN = 0;
             let maxExtent = 10;
@@ -435,18 +443,24 @@
             // z-up -> y-up
             inner.rotation.x = -Math.PI/2;
 
-            renderSidebar([...buildingIds], divisions, gridSize);
+            renderSidebar([...buildingIds], divisions, gridSize, rdCenter);
             fitCamera();
         }
 
-        function renderSidebar(buildingIds, divisions, gridSize) {
+        function renderSidebar(buildingIds, divisions, gridSize, rdCenter) {
             const order = { 'WallSurface': 0, 'RoofSurface': 1, 'GroundSurface': 2 };
             const sorted = [...surfaceList].sort((a,b) => {
                 const oa = order[a.semType] ?? 3, ob = order[b.semType] ?? 3;
                 return oa !== ob ? oa - ob : b.area - a.area;
             });
 
-            let html = '<div class="building-name">' + buildingIds.join('<br>') +
+            const bagLink = rdCenter
+                ? '<br><a href="https://3dbag.nl/en/viewer?rdx=' + rdCenter.x + '&rdy=' + rdCenter.y +
+                  '&ox=-125&oy=235&oz=208&placeMarker=true' +
+                  '" target="_blank" rel="noopener" style="color:#7ab0e0;">View on 3dbag.nl ↗</a>'
+                : '';
+
+            let html = '<div class="building-name">' + buildingIds.join('<br>') + bagLink +
                        '<br>' + sorted.length + ' surfaces · grid cell = ' + (gridSize / divisions) + ' m' +
                        '<br>axes: <span style="color:#e06c60">red = East</span>, <span style="color:#7ab0e0">blue = South</span>, <span style="color:#81c784">green = up</span></div>';
             sorted.forEach((s, i) => {
@@ -507,10 +521,14 @@
             fetchBtn.disabled = true;
 
             const apiUrl = 'https://api.3dbag.nl/collections/pand/items/' + encodeURIComponent(id);
-            const attempts = [
-                { name: 'direct', url: apiUrl },
-                { name: 'proxy allorigins', url: 'https://api.allorigins.win/raw?url=' + encodeURIComponent(apiUrl) },
-            ];
+            // After deploying your Cloudflare Worker, paste its URL here, e.g.:
+            // const WORKER_URL = 'https://3dhuisje-proxy.YOURNAME.workers.dev';
+            const WORKER_URL = '';
+
+            const attempts = [];
+            if (WORKER_URL) attempts.push({ name: 'worker', url: WORKER_URL + '/?id=' + encodeURIComponent(id) });
+            attempts.push({ name: 'direct', url: apiUrl });
+            attempts.push({ name: 'proxy allorigins', url: 'https://api.allorigins.win/raw?url=' + encodeURIComponent(apiUrl) });
 
             let lastError = null;
             for (const a of attempts) {
@@ -533,8 +551,11 @@
                     lastError = err;
                 }
             }
-            showStatus('❌ Could not fetch (' + (lastError && lastError.message) + '). ' +
-                       'Open the API URL in a new tab, save it as .json and load it as a file below.', 'error');
+            statusDiv.innerHTML = '❌ Could not fetch (' + (lastError && lastError.message) + ').<br>' +
+                'Plan B: <a href="' + apiUrl + '" target="_blank" rel="noopener" style="color:#ffcdd2; text-decoration:underline;">open the API response ↗</a>, ' +
+                'select all (Ctrl/Cmd+A), copy, and paste it in the "Or paste JSON" box above.';
+            statusDiv.className = 'status error';
+            document.getElementById('pasteDetails').open = true;
             fetchBtn.disabled = false;
         }
 
@@ -547,21 +568,34 @@
             showStatus('Loading...', 'loading');
 
             const reader = new FileReader();
-            reader.onload = e => {
-                try {
-                    if (!renderer) initThree();
-                    const scenes = normalize(e.target.result);
-                    if (!scenes.length) throw new Error('Unrecognized format');
-                    loadScenes(scenes);
-                    if (surfaceList.length) showStatus('✓ ' + surfaceList.length + ' surfaces', 'success');
-                } catch (err) {
-                    showStatus('❌ ' + err.message, 'error');
-                    console.error(err);
-                }
-            };
+            reader.onload = e => loadFromText(e.target.result);
             reader.onerror = () => showStatus('❌ Could not read the file', 'error');
             reader.readAsText(file);
         });
+
+        document.getElementById('pasteBtn').addEventListener('click', () => {
+            const text = document.getElementById('pasteInput').value.trim();
+            if (!text) { showStatus('❌ Paste the JSON first', 'error'); return; }
+            showStatus('Loading...', 'loading');
+            loadFromText(text);
+        });
+
+        document.getElementById('pasteDetails').addEventListener('toggle', function () {
+            document.getElementById('pasteRow').style.display = this.open ? 'flex' : 'none';
+        });
+
+        function loadFromText(text) {
+            try {
+                if (!renderer) initThree();
+                const scenes = normalize(text);
+                if (!scenes.length) throw new Error('Unrecognized format');
+                loadScenes(scenes);
+                if (surfaceList.length) showStatus('✓ ' + surfaceList.length + ' surfaces', 'success');
+            } catch (err) {
+                showStatus('❌ ' + err.message, 'error');
+                console.error(err);
+            }
+        }
 
         window.addEventListener('load', () => { if (!renderer) initThree(); });
     </script>
